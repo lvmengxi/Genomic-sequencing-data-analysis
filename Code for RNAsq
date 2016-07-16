@@ -1,0 +1,94 @@
+### RNAseq - DE analysis EdgeR
+  
+# install packages for first time user
+#   source("http://bioconductor.org/biocLite.R")
+#   biocLite("limma")
+#   biocLite("edgeR")
+#   biocLite("biomaRt")
+  
+# settings section begins 
+
+  incsv <- "2. unique count.csv"  
+  
+  sample.col=c(2:9)#if use whole
+  group <- factor(c(1,1,1,1,2,2,2,2),labels=c("c","i"))  #if use whole
+  
+  
+  filter.counts <- 1
+  filter.samples <- 3
+    
+  
+# read in the data
+  library(edgeR)
+	x <- read.csv(incsv, header = TRUE)
+	head(x)
+  x[,sample.col]=apply(x[,sample.col],2,as.numeric)
+  sum(is.na(x))
+	y <- DGEList(counts=x[, sample.col], group=group, genes=x[1])
+	dim(y)
+
+  # filter
+	keep <- rowSums(cpm(y) > filter.counts) >= filter.samples 
+	y.filter <- y[keep, ]
+	dim(y.filter)
+  
+	y.filter$samples$lib.size <- colSums(y.filter$counts)
+	
+  y.filter$samples
+  y.filter$counts[y.filter$genes=="GAPDH",]
+  y.filter$counts[y.filter$genes=="ACTB",]
+  y.filter$counts[y.filter$genes=="ADAMTS4",]
+  y.filter$counts[y.filter$genes=="MMP13",]
+# normalization
+	y.filter <- calcNormFactors(y.filter)
+	y.filter$samples
+
+# data exploration
+	plotMDS(y.filter)
+  plotMDS(y.filter,method="BCV")
+
+# estimate the dispersions
+	y.filter <- estimateCommonDisp(y.filter, verbose=TRUE)
+	y.filter <- estimateTagwiseDisp(y.filter)
+  plotBCV(y.filter)
+
+#blocking moodel
+  animal=factor(c(1,2,3,4,1,2,3,4,1,4,1,2,3,4),labels=c("n1","n2","n3","n4"))   # whole data set
+  animal
+  
+  group
+  
+  design=model.matrix(~animal+group)
+  design
+  
+  fit=glmFit(y.filter,design)
+  #lrt=glmLRT(fit, contrast=c(1,1,1,0,-1,-1,-1))#iza-i
+  lrt=glmLRT(fit, coef=5)#i-c
+  
+  topTags(lrt) 
+  de=decideTestsDGE(lrt)
+  summary(decideTestsDGE(lrt))
+  
+  # write expressedtags without any annotations
+  lrt.all <- topTags(lrt, n=1000000)
+  counts.all <- cpm(y.filter,normalized.lib.sizes=TRUE)[rownames(lrt.all), ]
+  lrt.all.cpm <- merge(lrt.all, counts.all, 
+                      by.x="row.names", by.y="row.names", all.x=TRUE)
+  write.table(lrt.all.cpm, file="result_CvsI_block.csv", col.names=NA, sep=",") 
+  
+  # setup
+  sessionInfo()
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
